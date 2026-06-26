@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Columns3, Table, Plus } from 'lucide-react';
+import { Columns3, Table, LayoutDashboard, Plus } from 'lucide-react';
 
 export default function Nav({ onNewLead }: { onNewLead?: () => void }) {
   const path = usePathname();
@@ -33,6 +33,15 @@ export default function Nav({ onNewLead }: { onNewLead?: () => void }) {
             >
               <Table size={15} />
               <span className="hidden sm:inline">Tabla</span>
+            </Link>
+            <Link
+              href="/dashboard"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                path === '/dashboard' ? 'bg-[#1e1e24] text-[#f0f0f2]' : 'text-[#6b6b76] hover:text-[#a1a1aa]'
+              }`}
+            >
+              <LayoutDashboard size={15} />
+              <span className="hidden sm:inline">Dashboard</span>
             </Link>
           </div>
         </div>
