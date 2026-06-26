@@ -130,6 +130,38 @@ export default function LeadDetail({ id }: Props) {
   const fbData = lead.facebook_form_data || {};
   const stageLabel = (s: string) => STAGES.find((st) => st.id === s)?.label || s;
 
+  const fbPhone = fbData?.phone_number || fbData?.phone || '';
+  const displayPhone = lead.phone || fbPhone;
+
+  const knownFields: Record<string, { label: string; formatter?: (v: string) => string }> = {
+    terreno: { label: 'Terreno' },
+    superficie: { label: 'Superficie' },
+    superficie_m2: { label: 'Superficie (m²)' },
+    inversion: { label: 'Inversión' },
+    presupuesto: { label: 'Presupuesto' },
+    plazo: { label: 'Plazo' },
+    objetivo: { label: 'Objetivo' },
+    descripcion: { label: 'Descripción' },
+    consulta: { label: 'Consulta' },
+    mensaje: { label: 'Mensaje' },
+  };
+
+  const parsedFields: { label: string; value: string }[] = [];
+  const extraFields: [string, string][] = [];
+
+  if (fbData && typeof fbData === 'object') {
+    for (const [key, val] of Object.entries(fbData)) {
+      const strVal = String(val || '');
+      if (!strVal) continue;
+      const known = knownFields[key];
+      if (known) {
+        parsedFields.push({ label: known.label, value: strVal });
+      } else if (!['full_name', 'email', 'phone_number', 'phone'].includes(key)) {
+        extraFields.push([key, strVal]);
+      }
+    }
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       {/* Back */}
@@ -146,15 +178,15 @@ export default function LeadDetail({ id }: Props) {
         <div>
           <h1 className="text-2xl font-semibold text-[#f0f0f2]">{lead.full_name}</h1>
           <div className="flex flex-wrap items-center gap-3 mt-1.5">
-            {lead.phone && (
+            {displayPhone && (
               <a
-                href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`}
+                href={`https://wa.me/${displayPhone.replace(/[^0-9]/g, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-sm text-[#3b82f6] hover:underline"
               >
                 <Phone size={13} />
-                {lead.phone}
+                {displayPhone}
                 <ExternalLink size={11} />
               </a>
             )}
@@ -210,17 +242,28 @@ export default function LeadDetail({ id }: Props) {
             </div>
           </div>
 
-          {/* FB Form Data */}
-          {Object.keys(fbData).length > 0 && (
+          {/* Información del lead */}
+          {(parsedFields.length > 0 || extraFields.length > 0) && (
             <div className="bg-[#121214] border border-[#2a2a30] rounded-xl p-4">
-              <h3 className="text-xs uppercase tracking-wider text-[#6b6b76] font-medium mb-3">Datos del formulario de Meta</h3>
+              <h3 className="text-xs uppercase tracking-wider text-[#6b6b76] font-medium mb-3">Información del lead</h3>
               <div className="space-y-2">
-                {Object.entries(fbData).map(([key, val]) => (
-                  <div key={key} className="flex justify-between text-sm py-1 border-b border-[#2a2a30]/50 last:border-0">
-                    <span className="text-[#6b6b76] capitalize">{key.replace(/_/g, ' ')}</span>
-                    <span className="text-[#f0f0f2] text-right ml-4 max-w-[60%]">{String(val)}</span>
+                {parsedFields.map((f) => (
+                  <div key={f.label} className="flex justify-between text-sm py-1.5 border-b border-[#2a2a30]/50 last:border-0">
+                    <span className="text-[#6b6b76]">{f.label}</span>
+                    <span className="text-[#f0f0f2] text-right ml-4 max-w-[65%] capitalize">{f.value.replace(/_/g, ' ')}</span>
                   </div>
                 ))}
+                {extraFields.length > 0 && (
+                  <>
+                    <div className="text-[10px] text-[#6b6b76] uppercase tracking-wider pt-2">Otros datos</div>
+                    {extraFields.map(([key, val]) => (
+                      <div key={key} className="flex justify-between text-sm py-1 border-b border-[#2a2a30]/50 last:border-0">
+                        <span className="text-[#6b6b76] capitalize">{key.replace(/_/g, ' ')}</span>
+                        <span className="text-[#f0f0f2] text-right ml-4 max-w-[60%]">{val}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
           )}
