@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { getSupabase } from '@/lib/supabase';
-import { STAGES, type Lead } from '@/lib/types';
+import { STAGES, type Lead, type LeadTemperature } from '@/lib/types';
 import {
   getLeadHonorario, getAdStats, getConversionRates,
   getTimelineDistribution, getNewLeadsComparison, getStaleLeads,
@@ -12,7 +12,8 @@ import {
 import {
   TrendingUp, DollarSign, BarChart3, Users, Clock,
   AlertTriangle, ArrowUp, ArrowDown, Target,
-  Building2, Phone, MessageSquare, ExternalLink,
+  Building2, Phone, MessageSquare, ExternalLink, X,
+  Thermometer, Snowflake, Flame, TrendingDown, Calendar,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -30,6 +31,83 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
       </div>
       <div className="text-2xl font-semibold text-[#f0f0f2]">{value}</div>
       {sub && <div className="text-xs text-[#6b6b76] mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+function ClickableStatCard({ icon: Icon, label, value, sub, color, onClick }: {
+  icon: any; label: string; value: string; sub?: string; color?: string; onClick?: () => void;
+}) {
+  return (
+    <button onClick={onClick} className="w-full text-left bg-[#121214] border border-[#2a2a30] rounded-xl p-4 hover:border-[#d4a853]/50 transition-all cursor-pointer group">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-8 h-8 rounded-lg bg-[#1e1e24] flex items-center justify-center" style={{ color: color || '#d4a853' }}>
+          <Icon size={16} />
+        </div>
+        <span className="text-xs text-[#6b6b76] uppercase tracking-wider font-medium">{label}</span>
+      </div>
+      <div className="text-2xl font-semibold text-[#f0f0f2] group-hover:text-[#d4a853] transition-colors">{value}</div>
+      {sub && <div className="text-xs text-[#6b6b76] mt-1">{sub}</div>}
+    </button>
+  );
+}
+
+function LeadListModal({ leads, temperature, onClose }: {
+  leads: Lead[]; temperature: LeadTemperature | null; onClose: () => void;
+}) {
+  const tempColors: Record<string, string> = {
+    caliente: '#10b981',
+    tibio: '#3b82f6',
+    frio: '#ef4444',
+  };
+  const tempLabels: Record<string, string> = {
+    caliente: 'Calientes',
+    tibio: 'Tibios',
+    frio: 'Fríos',
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[#121214] border border-[#2a2a30] rounded-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a2a30]">
+          <h2 className="text-sm font-semibold text-[#f0f0f2] uppercase tracking-wider" style={{ color: tempColors[temperature || ''] }}>
+            {tempLabels[temperature || '']} · {leads.length} lead{leads.length !== 1 ? 's' : ''}
+          </h2>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg bg-[#1e1e24] flex items-center justify-center text-[#6b6b76] hover:text-[#f0f0f2] transition-colors">
+            <X size={14} />
+          </button>
+        </div>
+        <div className="overflow-y-auto max-h-[calc(80vh-60px)]">
+          {leads.length === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-[#6b6b76]">Sin leads en esta categoría</div>
+          ) : (
+            leads.map(l => {
+              const days = Math.floor((Date.now() - new Date(l.created_at).getTime()) / (1000 * 60 * 60 * 24));
+              return (
+                <div key={l.id} className="px-5 py-3 border-b border-[#2a2a30]/50 last:border-0 hover:bg-[#1a1a1e] transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Link href={`/leads/${l.id}`} className="text-sm font-medium text-[#f0f0f2] hover:text-[#d4a853] transition-colors">
+                        {l.full_name}
+                      </Link>
+                      {l.phone && (
+                        <a href={`https://wa.me/${l.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-[#3b82f6] hover:underline mt-0.5">
+                          <Phone size={9} /> {l.phone}
+                        </a>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-[#6b6b76]">{days}d</div>
+                      <div className="text-[10px] text-[#6b6b76]">{l.stage?.replace(/_/g, ' ')}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -60,6 +138,10 @@ const stageColors: Record<string, string> = {
 export default function Dashboard() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [popupTemperature, setPopupTemperature] = useState<LeadTemperature | null>(null);
+  const [paidInsights, setPaidInsights] = useState<any[] | null>(null);
+  const [paidLoading, setPaidLoading] = useState(true);
+  const [paidError, setPaidError] = useState('');
 
   const fetchLeads = useCallback(async () => {
     const { data } = await getSupabase().from('leads').select('*').order('created_at', { ascending: false });
@@ -68,6 +150,19 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
+
+  useEffect(() => {
+    async function loadPaidInsights() {
+      try {
+        const res = await fetch('/api/meta/insights?date_preset=last_30d');
+        const body = await res.json();
+        if (body.error) { setPaidError(body.error); setPaidInsights(null); }
+        else { setPaidInsights(body.accounts); setPaidError(''); }
+      } catch { setPaidError('Error al cargar insights'); setPaidInsights(null); }
+      finally { setPaidLoading(false); }
+    }
+    loadPaidInsights();
+  }, []);
 
   if (loading) {
     return (
@@ -79,6 +174,8 @@ export default function Dashboard() {
 
   const activeLeads = leads.filter(l => l.stage !== 'cerrado_perdido');
   const hotLeads = leads.filter(l => l.temperature === 'caliente' && l.stage !== 'cerrado_perdido');
+  const warmLeads = leads.filter(l => l.temperature === 'tibio' && l.stage !== 'cerrado_perdido');
+  const coldLeads = leads.filter(l => l.temperature === 'frio' && l.stage !== 'cerrado_perdido');
   const budgetLeads = leads.filter(l => l.stage === 'presupuesto_enviado');
   const totalHonorarios = activeLeads.reduce((sum, l) => sum + getLeadHonorario(l), 0);
   const hotHonorarios = hotLeads.reduce((sum, l) => sum + getLeadHonorario(l), 0);
@@ -88,6 +185,19 @@ export default function Dashboard() {
   const timelineDist = getTimelineDistribution(leads);
   const newComparison = getNewLeadsComparison(leads);
   const staleLeads = getStaleLeads(leads);
+
+  const closedRevenue = leads
+    .filter(l => l.stage === 'cerrado_ganado' && l.revenue)
+    .reduce((sum, l) => sum + (l.revenue || 0), 0);
+  const totalAdSpend = paidInsights?.reduce((s: number, a: any) => s + a.totalSpend, 0) || 0;
+  const totalAdLeads = paidInsights?.reduce((s: number, a: any) => s + a.totalLeads, 0) || 0;
+  const roas = totalAdSpend > 0 ? closedRevenue / totalAdSpend : 0;
+
+  const now = new Date();
+  const followUpLeads = leads.filter(l =>
+    l.stage !== 'cerrado_perdido' && l.stage !== 'cerrado_ganado' && l.next_action_date
+  );
+  const overdueCount = followUpLeads.filter(l => new Date(l.next_action_date!) < new Date(now.toDateString())).length;
 
   const avgInvestment = leads.reduce((sum, l) => {
     const inv = parseInvestment(l);
@@ -141,6 +251,37 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* Temperatura de leads */}
+      <div>
+        <SectionTitle>Leads por temperatura</SectionTitle>
+        <div className="grid grid-cols-3 gap-4">
+          <ClickableStatCard
+            icon={Flame}
+            label="Calientes"
+            value={String(hotLeads.length)}
+            sub="Listos para avanzar"
+            color="#10b981"
+            onClick={() => setPopupTemperature('caliente')}
+          />
+          <ClickableStatCard
+            icon={Thermometer}
+            label="Tibios"
+            value={String(warmLeads.length)}
+            sub="En seguimiento"
+            color="#3b82f6"
+            onClick={() => setPopupTemperature('tibio')}
+          />
+          <ClickableStatCard
+            icon={Snowflake}
+            label="Fríos"
+            value={String(coldLeads.length)}
+            sub="Seguimiento pasivo"
+            color="#ef4444"
+            onClick={() => setPopupTemperature('frio')}
+          />
+        </div>
+      </div>
+
       {/* Pipeline Financiero */}
       <div>
         <SectionTitle>Pipeline financiero</SectionTitle>
@@ -166,6 +307,116 @@ export default function Dashboard() {
             color="#06b6d4"
           />
         </div>
+      </div>
+
+      {/* Paid Insights + ROAS */}
+      <div>
+        <SectionTitle>
+          <span className="flex items-center gap-2">
+            <BarChart3 size={14} className="text-[#d4a853]" />
+            Paid Insights + ROAS
+          </span>
+        </SectionTitle>
+        {paidLoading ? (
+          <div className="bg-[#121214] border border-[#2a2a30] rounded-xl p-6 text-center text-sm text-[#6b6b76]">
+            Cargando datos de Meta Ads...
+          </div>
+        ) : paidError ? (
+          <div className="bg-[#121214] border border-[#2a2a30] rounded-xl p-6 text-center text-sm text-[#ef4444]">
+            {paidError}
+          </div>
+        ) : paidInsights && paidInsights.length > 0 ? (
+          <div className="space-y-4">
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <StatCard icon={DollarSign} label="Gasto total" value={formatUSD(Math.round(totalAdSpend))} color="#ef4444" />
+              <StatCard icon={Users} label="Leads de ads" value={String(totalAdLeads)} color="#3b82f6" />
+              <StatCard icon={TrendingDown} label="CPA" value={formatUSD(Math.round(totalAdSpend / (totalAdLeads || 1)))} color="#f59e0b" />
+              <StatCard icon={Target} label="Revenue cerrado" value={formatUSD(Math.round(closedRevenue))} color="#10b981" />
+              <StatCard icon={TrendingUp} label="ROAS" value={roas > 0 ? `${roas.toFixed(1)}x` : '—'} color={roas >= 1 ? '#10b981' : '#6b6b76'} sub={roas > 0 ? 'por $1 invertido' : 'sin revenue aún'} />
+            </div>
+            {/* Per-account table */}
+            {paidInsights.map((account: any) => (
+              <div key={account.accountName} className="bg-[#121214] border border-[#2a2a30] rounded-xl overflow-hidden">
+                <div className="px-4 py-2.5 text-xs text-[#6b6b76] uppercase tracking-wider border-b border-[#2a2a30]">
+                  {account.accountName}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-[#1a1a1e] border-b border-[#2a2a30]">
+                        <th className="text-left px-3 py-2.5 text-[#6b6b76] font-medium text-xs uppercase tracking-wider">Campaña</th>
+                        <th className="text-right px-3 py-2.5 text-[#6b6b76] font-medium text-xs uppercase tracking-wider">Gasto</th>
+                        <th className="text-right px-3 py-2.5 text-[#6b6b76] font-medium text-xs uppercase tracking-wider hidden sm:table-cell">Impr.</th>
+                        <th className="text-right px-3 py-2.5 text-[#6b6b76] font-medium text-xs uppercase tracking-wider hidden sm:table-cell">Clicks</th>
+                        <th className="text-right px-3 py-2.5 text-[#6b6b76] font-medium text-xs uppercase tracking-wider">Leads</th>
+                        <th className="text-right px-3 py-2.5 text-[#6b6b76] font-medium text-xs uppercase tracking-wider">CPA</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {account.campaigns.map((c: any) => (
+                        <tr key={c.campaign_id} className="border-b border-[#2a2a30]/50 last:border-0 hover:bg-[#1a1a1e] transition-colors">
+                          <td className="px-3 py-2.5 text-[#f0f0f2] font-medium text-xs truncate max-w-[200px]">{c.campaign_name}</td>
+                          <td className="px-3 py-2.5 text-right text-[#f0f0f2] text-xs">{formatUSD(Math.round(c.spend))}</td>
+                          <td className="px-3 py-2.5 text-right text-[#6b6b76] text-xs hidden sm:table-cell">{(c.impressions / 1000).toFixed(0)}k</td>
+                          <td className="px-3 py-2.5 text-right text-[#6b6b76] text-xs hidden sm:table-cell">{c.clicks}</td>
+                          <td className="px-3 py-2.5 text-right text-[#f0f0f2] text-xs">{c.leads}</td>
+                          <td className="px-3 py-2.5 text-right text-xs" style={{ color: (c.spend / (c.leads || 1)) > 50 ? '#ef4444' : '#10b981' }}>
+                            {formatUSD(Math.round(c.spend / (c.leads || 1)))}
+                          </td>
+                        </tr>
+                      ))}
+                      {account.campaigns.length === 0 && (
+                        <tr><td colSpan={6} className="px-3 py-6 text-center text-[#6b6b76] text-xs">Sin datos de campañas</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-[#121214] border border-[#2a2a30] rounded-xl p-6 text-center text-sm text-[#6b6b76]">
+            Conectá Meta Ads para ver insights
+          </div>
+        )}
+      </div>
+
+      {/* Próximas acciones */}
+      <div>
+        <SectionTitle>
+          <Link href="/seguimientos" className="flex items-center gap-2 hover:text-[#d4a853] transition-colors">
+            <Calendar size={14} />
+            Próximas acciones
+            {overdueCount > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#ef4444]/20 text-[#ef4444] font-normal">
+                {overdueCount} vencida{overdueCount !== 1 ? 's' : ''}
+              </span>
+            )}
+          </Link>
+        </SectionTitle>
+        <Link href="/seguimientos" className="block group">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-[#121214] border border-[#2a2a30] rounded-xl p-4 group-hover:border-[#ef4444]/50 transition-colors">
+              <div className="text-xs text-[#6b6b76] uppercase tracking-wider mb-1">Vencidas</div>
+              <div className="text-2xl font-semibold text-[#ef4444]">{overdueCount}</div>
+            </div>
+            <div className="bg-[#121214] border border-[#2a2a30] rounded-xl p-4 group-hover:border-[#f59e0b]/50 transition-colors">
+              <div className="text-xs text-[#6b6b76] uppercase tracking-wider mb-1">Hoy</div>
+              <div className="text-2xl font-semibold text-[#f59e0b]">
+                {followUpLeads.filter(l => {
+                  const d = new Date(l.next_action_date!);
+                  const today = new Date();
+                  return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+                }).length}
+              </div>
+            </div>
+            <div className="bg-[#121214] border border-[#2a2a30] rounded-xl p-4 group-hover:border-[#3b82f6]/50 transition-colors">
+              <div className="text-xs text-[#6b6b76] uppercase tracking-wider mb-1">Próximas</div>
+              <div className="text-2xl font-semibold text-[#3b82f6]">{followUpLeads.length}</div>
+            </div>
+          </div>
+        </Link>
       </div>
 
       {/* Ads Performance */}
@@ -332,6 +583,15 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Lead Popup */}
+      {popupTemperature && (
+        <LeadListModal
+          leads={leads.filter(l => l.temperature === popupTemperature && l.stage !== 'cerrado_perdido')}
+          temperature={popupTemperature}
+          onClose={() => setPopupTemperature(null)}
+        />
       )}
     </div>
   );

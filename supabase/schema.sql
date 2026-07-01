@@ -27,6 +27,7 @@ create table leads (
   next_action_text text default '',
   next_action_date date,
   discard_reason text default '',
+  revenue numeric(12,2),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   stage_changed_at timestamptz not null default now(),
@@ -46,3 +47,9 @@ create table lead_activity_log (
 );
 
 create index idx_activity_lead on lead_activity_log(lead_id);
+
+create table if not exists settings (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);

@@ -8,8 +8,10 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   ArrowLeft, Phone, MessageSquare, Calendar, Target, TrendingUp,
-  Plus, Send, X, ExternalLink, Clock, Save
+  Plus, Send, X, ExternalLink, Clock, Save, Sparkles, CheckCircle2, Circle,
 } from 'lucide-react';
+import AIMessageModal from './AIMessageModal';
+import { suggestNextActionDate, suggestNextActionText, getSequencesForStage, getCompletedSteps, getTotalSteps } from '@/lib/sequences';
 
 interface Props {
   id: string;
@@ -39,6 +41,8 @@ export default function LeadDetail({ id }: Props) {
   const [nextActionText, setNextActionText] = useState('');
   const [nextActionDate, setNextActionDate] = useState('');
   const [selectedStage, setSelectedStage] = useState<LeadStage | ''>('');
+  const [revenue, setRevenue] = useState('');
+  const [showAIModal, setShowAIModal] = useState(false);
 
   const fetchLead = useCallback(async () => {
     const { data } = await getSupabase().from('leads').select('*').eq('id', id).single();
@@ -47,6 +51,7 @@ export default function LeadDetail({ id }: Props) {
       setSelectedStage(data.stage);
       setNextActionText(data.next_action_text || '');
       setNextActionDate(data.next_action_date || '');
+      setRevenue(data.revenue ? String(data.revenue) : '');
     }
   }, [id]);
 
@@ -78,6 +83,16 @@ export default function LeadDetail({ id }: Props) {
     };
     if (newStage === 'cerrado_ganado' || newStage === 'cerrado_perdido') {
       update.closed_at = now;
+    }
+    if (lead.stage === 'cerrado_ganado' && newStage !== 'cerrado_ganado') {
+      update.revenue = null;
+    }
+    if (newStage !== 'cerrado_ganado' && newStage !== 'cerrado_perdido') {
+      const tempLead: Lead = { ...lead, stage: newStage, stage_changed_at: now };
+      const nextDate = suggestNextActionDate(tempLead);
+      const nextText = suggestNextActionText(tempLead);
+      if (nextText) update.next_action_text = nextText;
+      if (nextDate) update.next_action_date = nextDate;
     }
     await getSupabase().from('leads').update(update).eq('id', id);
     await getSupabase().from('lead_activity_log').insert({
@@ -111,6 +126,14 @@ export default function LeadDetail({ id }: Props) {
     await getSupabase().from('leads').update({
       next_action_text: nextActionText,
       next_action_date: nextActionDate || null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id);
+  };
+
+  const handleSaveRevenue = async () => {
+    const val = revenue ? parseFloat(revenue.replace(/[^0-9.]/g, '')) : null;
+    await getSupabase().from('leads').update({
+      revenue: val,
       updated_at: new Date().toISOString(),
     }).eq('id', id);
   };
@@ -374,6 +397,72 @@ export default function LeadDetail({ id }: Props) {
             </button>
           </div>
 
+          {/* Secuencia de seguimiento */}
+          {lead.stage !== 'cerrado_ganado' && lead.stage !== 'cerrado_perdido' && (() => {
+            const allSteps = getTotalSteps(lead);
+            const done = getCompletedSteps(lead).length;
+            return (
+            <div className="bg-[#121214] border border-[#2a2a30] rounded-xl p-4">
+              <h3 className="text-xs uppercase tracking-wider text-[#6b6b76] font-medium mb-3">Secuencia de seguimiento</h3>
+              <div className="space-y-2">
+                {allSteps.length > 0 ? (
+                  allSteps.map((step, i) => {
+                    const isDone = i < done;
+                    const isNext = i === done;
+                    return (
+                      <div key={i} className={`flex items-start gap-2 ${isDone ? 'opacity-40' : ''}`}>
+                        {isDone ? (
+                          <CheckCircle2 size={12} className="mt-0.5 text-[#10b981] shrink-0" />
+                        ) : isNext ? (
+                          <Circle size={12} className="mt-0.5 text-[#d4a853] shrink-0" />
+                        ) : (
+                          <Circle size={12} className="mt-0.5 text-[#2a2a30] shrink-0" />
+                        )}
+                        <div className="text-[11px]">
+                          <span className={isNext ? 'text-[#f0f0f2]' : 'text-[#6b6b76]'}>
+                            Día {step.day} — {step.label}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-[#6b6b76] text-center py-2">Sin secuencia definida</p>
+                )}
+              </div>
+            </div>
+            );
+          })()}
+
+          {/* Revenue (solo cerrado_ganado) */}
+          {lead.stage === 'cerrado_ganado' && (
+            <div className="bg-[#121214] border border-[#2a2a30] rounded-xl p-4">
+              <h3 className="text-xs uppercase tracking-wider text-[#6b6b76] font-medium mb-3">Revenue cerrado</h3>
+              <input
+                placeholder="Monto en USD"
+                value={revenue}
+                onChange={(e) => setRevenue(e.target.value)}
+                className="w-full bg-[#1a1a1e] border border-[#2a2a30] rounded-lg px-3 py-2 text-sm text-[#f0f0f2] placeholder-[#6b6b76] outline-none focus:border-[#d4a853]/50 transition-colors mb-2"
+              />
+              <button
+                onClick={handleSaveRevenue}
+                className="w-full px-3 py-2 bg-[#1e1e24] border border-[#2a2a30] text-[#f0f0f2] rounded-lg text-sm hover:bg-[#24242c] transition-colors flex items-center justify-center gap-1"
+              >
+                <Save size={14} />
+                Guardar revenue
+              </button>
+            </div>
+          )}
+
+          {/* IA - Sugerir mensaje */}
+          <button
+            onClick={() => setShowAIModal(true)}
+            className="w-full flex items-center justify-center gap-2 bg-[#1e1e24] border border-[#d4a853]/30 rounded-xl p-4 text-sm text-[#d4a853] hover:bg-[#24242c] transition-colors"
+          >
+            <Sparkles size={16} />
+            Sugerir mensaje con IA
+          </button>
+
           {/* WhatsApp */}
           {lead.phone && (
             <a
@@ -399,6 +488,20 @@ export default function LeadDetail({ id }: Props) {
           )}
         </div>
       </div>
+
+      {showAIModal && (
+        <AIMessageModal
+          leadId={lead.id}
+          leadName={lead.full_name}
+          leadPhone={lead.phone || ''}
+          stage={lead.stage}
+          notes={lead.notes?.map(n => n.content).join('\n')}
+          description={(lead.facebook_form_data as Record<string, string>)?.['describinos_brevemente_cuál_es_tu_objetivo_principal_de_este_proyecto:'] || ''}
+          campaign_name={lead.campaign_name}
+          ad_name={lead.ad_name}
+          onClose={() => setShowAIModal(false)}
+        />
+      )}
     </div>
   );
 }

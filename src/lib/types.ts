@@ -32,6 +32,7 @@ export interface Lead {
   next_action_text: string;
   next_action_date: string | null;
   discard_reason: string;
+  revenue: number | null;
   created_at: string;
   updated_at: string;
   stage_changed_at: string;
