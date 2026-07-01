@@ -15,22 +15,10 @@ export interface Sequence {
   steps: SequenceStep[];
 }
 
-const TEMPLATES: Record<string, Omit<Sequence, 'temperature'>[]> = {
+const TEMPLATES: Record<string, Sequence[]> = {
   lead_entrante: [
     {
-      stage: 'lead_entrante',
-      label: 'Lead nuevo — tibio',
-      steps: [
-        { day: 1, label: 'Presentación inicial', cta: 'Presentarse y entender proyecto',
-          template: 'Hola {{name}}, soy Agustín de A7 Arquitectura. Vi que consultaste por tu proyecto y quería conocer un poco más sobre lo que estás buscando. ¿Qué tipo de obra tenés en mente?' },
-        { day: 3, label: 'Primer seguimiento', cta: 'Retomar contacto',
-          template: 'Hola {{name}}, ¿cómo estás? Te escribía para ver si pudiste pensar un poco más sobre tu proyecto. Cualquier duda que tengas, estoy acá para ayudarte.' },
-        { day: 7, label: 'Segundo seguimiento', cta: 'Compartir valor + cerrar o pasar a frío',
-          template: 'Hola {{name}}, te comparto algunos proyectos que estamos haciendo que son similares a lo que buscás. Avísame si querés que los veamos juntos y te armo un presupuesto sin compromiso.' },
-      ],
-    },
-    {
-      stage: 'lead_entrante',
+      stage: 'lead_entrante', temperature: 'caliente',
       label: 'Lead nuevo — caliente',
       steps: [
         { day: 1, label: 'Contacto inmediato', cta: 'Responder rápido y coordinar llamada',
@@ -41,53 +29,120 @@ const TEMPLATES: Record<string, Omit<Sequence, 'temperature'>[]> = {
           template: 'Hola {{name}}, no quería insistir pero quería dejarte abierta la puerta por si en algún momento querés avanzar con el proyecto. Estoy a tu disposición.' },
       ],
     },
+    {
+      stage: 'lead_entrante', temperature: 'tibio',
+      label: 'Lead nuevo — tibio',
+      steps: [
+        { day: 1, label: 'Presentación inicial', cta: 'Presentarse y entender proyecto',
+          template: 'Hola {{name}}, soy Agustín de A7 Arquitectura. Vi que consultaste por tu proyecto y quería conocer un poco más sobre lo que estás buscando. ¿Qué tipo de obra tenés en mente?' },
+        { day: 7, label: 'Primer seguimiento', cta: 'Retomar contacto + compartir valor',
+          template: 'Hola {{name}}, te comparto algunos proyectos similares al tuyo que estamos haciendo. Avísame si querés que los veamos juntos y te armo un presupuesto sin compromiso.' },
+      ],
+    },
+    {
+      stage: 'lead_entrante', temperature: 'frio',
+      label: 'Lead nuevo — frío (seguimiento pasivo)',
+      steps: [
+        { day: 1, label: 'Apertura suave', cta: 'Reactivar con contenido de valor',
+          template: 'Hola {{name}}, te comparto este proyecto que hicimos recientemente por si te sirve de inspiración. Cuando quieras retomar la conversación, estoy acá.' },
+      ],
+    },
   ],
   conversacion_iniciada: [
     {
-      stage: 'conversacion_iniciada',
-      label: 'Conversación activa',
+      stage: 'conversacion_iniciada', temperature: 'caliente',
+      label: 'Conversación activa — caliente',
       steps: [
-        { day: 1, label: 'Continuar conversación', cta: 'Profundizar en el proyecto',
+        { day: 1, label: 'Profundizar proyecto', cta: 'Seguir conociendo necesidades',
           template: '{{name}}, contame un poco más sobre el terreno y qué estilo de construcción imaginás. Así puedo empezar a pensar algunas ideas.' },
-        { day: 3, label: 'Check-in silencio', cta: 'Reactivar si no respondió',
-          template: 'Hola {{name}}, ¿seguís ahí? Cualquier cosa que necesites, avísame.' },
+        { day: 3, label: 'Proponer avance', cta: 'Ofrecer llamado o presupuesto',
+          template: '{{name}}, con lo que me contaste ya tengo una idea del proyecto. ¿Querés que te prepare un presupuesto tentativo para ir viendo números?' },
+      ],
+    },
+    {
+      stage: 'conversacion_iniciada', temperature: 'tibio',
+      label: 'Conversación pausada — tibio',
+      steps: [
+        { day: 1, label: 'Retomar contacto', cta: 'Reactivar conversación',
+          template: 'Hola {{name}}, ¿cómo estás? Te escribía para ver si pudiste seguir pensando en el proyecto. Cualquier cosa que necesites, avísame.' },
+        { day: 7, label: 'Segundo intento', cta: 'Compartir valor',
+          template: 'Hola {{name}}, te quería compartir este proyecto que estamos haciendo, tiene un estilo similar a lo que buscabas. ¿Qué te parece?' },
+      ],
+    },
+  ],
+  llamada_realizada: [
+    {
+      stage: 'llamada_realizada', temperature: 'caliente',
+      label: 'Post-llamada — caliente',
+      steps: [
+        { day: 1, label: 'Resumen de llamada', cta: 'Enviar resumen y próximos pasos',
+          template: '{{name}}, gracias por la llamada de hoy. Quedamos en que te paso más información sobre tu proyecto. Te escribo en estos días con todo.' },
+        { day: 4, label: 'Seguimiento', cta: 'Verificar interés y ofrecer presupuesto',
+          template: 'Hola {{name}}, como te prometí, te paso información adicional. ¿Te parece si coordinamos una videollamada con Nicolás para ver el proyecto en detalle y empezar a planificar?' },
+      ],
+    },
+    {
+      stage: 'llamada_realizada', temperature: 'tibio',
+      label: 'Post-llamada — tibio',
+      steps: [
+        { day: 1, label: 'Resumen', cta: 'Enviar resumen',
+          template: '{{name}}, gracias por la llamada. Quedamos en contacto. Cualquier duda, avísame.' },
       ],
     },
   ],
   presupuesto_enviado: [
     {
-      stage: 'presupuesto_enviado',
-      label: 'Presupuesto enviado',
+      stage: 'presupuesto_enviado', temperature: 'caliente',
+      label: 'Presupuesto enviado — caliente',
       steps: [
-        { day: 3, label: 'Seguimiento post-presupuesto', cta: 'Consultar si lo revisó',
+        { day: 3, label: 'Seguimiento rápido', cta: 'Consultar si lo revisó',
           template: 'Hola {{name}}, ¿pudiste revisar el presupuesto que te envié? Cualquier duda que tengas, estoy para ayudarte a entender cada parte.' },
-        { day: 7, label: 'Segundo seguimiento', cta: 'Resolver objeciones',
-          template: 'Hola {{name}}, quería consultarte si tenés alguna pregunta sobre el presupuesto o si necesitás que ajustemos algo para adecuarlo mejor a tu proyecto.' },
-        { day: 14, label: 'Cierre o seguimiento pasivo', cta: 'Último intento',
+        { day: 7, label: 'Resolver objeciones', cta: 'Ajustar si es necesario',
+          template: 'Hola {{name}}, quería consultarte si tenés alguna pregunta o si necesitás que ajustemos algo para adecuarlo mejor a tu proyecto.' },
+        { day: 14, label: 'Último intento', cta: 'Cierre o seguimiento pasivo',
           template: 'Hola {{name}}, entiendo que estos proyectos llevan su tiempo. Cuando quieras retomar la conversación, estoy acá. ¡Éxitos con el proyecto!' },
+      ],
+    },
+    {
+      stage: 'presupuesto_enviado', temperature: 'tibio',
+      label: 'Presupuesto enviado — tibio',
+      steps: [
+        { day: 5, label: 'Seguimiento', cta: 'Consultar si lo revisó',
+          template: 'Hola {{name}}, ¿pudiste revisar el presupuesto? Cualquier duda, avísame.' },
+        { day: 12, label: 'Último contacto', cta: 'Cierre abierto',
+          template: 'Hola {{name}}, por cualquier cosa que necesites en el futuro, acá estoy. ¡Que tengas un excelente proyecto!' },
       ],
     },
   ],
   reunion_encuentro: [
     {
-      stage: 'reunion_encuentro',
-      label: 'Post-reunión',
+      stage: 'reunion_encuentro', temperature: 'caliente',
+      label: 'Post-reunión — caliente',
       steps: [
         { day: 1, label: 'Agradecer encuentro', cta: 'Cerrar compromisos',
           template: 'Hola {{name}}, gracias por el tiempo de hoy. Quedamos en que te paso el presupuesto esta semana, ¿correcto? Cualquier cosa me escribís.' },
         { day: 5, label: 'Seguimiento presupuesto', cta: 'Verificar si recibió',
           template: 'Hola {{name}}, te envié el presupuesto que hablamos. Avísame si tenés alguna duda o querés que lo ajustemos.' },
+        { day: 12, label: 'Cierre', cta: 'Resolver o pasar a frío',
+          template: 'Hola {{name}}, quería consultarte si avanzaron con la decisión. Si necesitás más tiempo, no hay problema. Estoy a tu disposición.' },
+      ],
+    },
+    {
+      stage: 'reunion_encuentro', temperature: 'tibio',
+      label: 'Post-reunión — tibio',
+      steps: [
+        { day: 1, label: 'Agradecer', cta: 'Cerrar compromisos',
+          template: 'Hola {{name}}, gracias por el tiempo. Quedamos atentos a lo que resuelvan.' },
+        { day: 10, label: 'Seguimiento final', cta: 'Consultar decisión',
+          template: 'Hola {{name}}, quería saber si ya tomaron una decisión con el proyecto. Avísame cualquier cosa.' },
       ],
     },
   ],
 };
 
-const TEMPLATES_TIBIO: Record<string, Omit<Sequence, 'temperature'>[]> = {};
-const TEMPLATES_FRIO: Record<string, Omit<Sequence, 'temperature'>[]> = {};
-
 export function getSequencesForStage(stage: LeadStage, temperature: LeadTemperature): Sequence[] {
   const base = TEMPLATES[stage] || [];
-  return base.map(s => ({ ...s, temperature }));
+  return base.filter(s => s.temperature === temperature);
 }
 
 export function getNextStep(lead: Lead): SequenceStep | null {

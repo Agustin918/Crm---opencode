@@ -25,6 +25,7 @@ export default function SequenceManager({ onClose }: { onClose?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [selectedStage, setSelectedStage] = useState<LeadStage | 'all'>('all');
   const [applying, setApplying] = useState<string | null>(null);
+  const [bulkApplying, setBulkApplying] = useState(false);
 
   const fetchLeads = useCallback(async () => {
     const { data } = await getSupabase()
@@ -73,27 +74,52 @@ export default function SequenceManager({ onClose }: { onClose?: () => void }) {
   return (
     <div className="space-y-5">
       {/* Filter */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        <button
-          onClick={() => setSelectedStage('all')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-            selectedStage === 'all' ? 'bg-[#1e1e24] text-[#f0f0f2] ring-1 ring-[#2a2a30]' : 'bg-[#1a1a1e] text-[#6b6b76] hover:text-[#f0f0f2]'
-          }`}
-        >
-          Todos ({leads.length})
-        </button>
-        {STAGES.filter(s => s.id !== 'cerrado_ganado' && s.id !== 'cerrado_perdido').map(s => (
+      {/* Bulk actions */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
           <button
-            key={s.id}
-            onClick={() => setSelectedStage(s.id)}
+            onClick={() => setSelectedStage('all')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-              selectedStage === s.id ? 'bg-[#1e1e24] ring-1' : 'bg-[#1a1a1e] text-[#6b6b76] hover:text-[#f0f0f2]'
+              selectedStage === 'all' ? 'bg-[#1e1e24] text-[#f0f0f2] ring-1 ring-[#2a2a30]' : 'bg-[#1a1a1e] text-[#6b6b76] hover:text-[#f0f0f2]'
             }`}
-            style={selectedStage === s.id ? { color: stageColors[s.id], boxShadow: `0 0 0 1px ${stageColors[s.id]}` } : {}}
           >
-            {s.label} ({leads.filter(l => l.stage === s.id).length})
+            Todos ({leads.length})
           </button>
-        ))}
+          {STAGES.filter(s => s.id !== 'cerrado_ganado' && s.id !== 'cerrado_perdido').map(s => (
+            <button
+              key={s.id}
+              onClick={() => setSelectedStage(s.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                selectedStage === s.id ? 'bg-[#1e1e24] ring-1' : 'bg-[#1a1a1e] text-[#6b6b76] hover:text-[#f0f0f2]'
+              }`}
+              style={selectedStage === s.id ? { color: stageColors[s.id], boxShadow: `0 0 0 1px ${stageColors[s.id]}` } : {}}
+            >
+              {s.label} ({leads.filter(l => l.stage === s.id).length})
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={async () => {
+            setBulkApplying(true);
+            const { suggestNextActionDate, suggestNextActionText } = await import('@/lib/sequences');
+            for (const lead of filteredLeads) {
+              const date = suggestNextActionDate(lead);
+              const text = suggestNextActionText(lead);
+              if (!text && !date) continue;
+              await getSupabase().from('leads').update({
+                next_action_text: text || '',
+                next_action_date: date || null,
+                updated_at: new Date().toISOString(),
+              }).eq('id', lead.id);
+            }
+            fetchLeads();
+            setBulkApplying(false);
+          }}
+          disabled={bulkApplying || filteredLeads.length === 0}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e1e24] border border-[#2a2a30] rounded-lg text-xs text-[#d4a853] hover:bg-[#24242c] disabled:opacity-30 transition-colors shrink-0"
+        >
+          {bulkApplying ? 'Aplicando...' : `Aplicar a ${filteredLeads.length} leads`}
+        </button>
       </div>
 
       {/* Sequence cards */}
